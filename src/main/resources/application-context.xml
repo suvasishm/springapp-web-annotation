@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xsi:schemaLocation="
+	http://www.springframework.org/schema/beans 
+	http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+	http://www.springframework.org/schema/tx
+    http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+	http://www.springframework.org/schema/aop 
+	http://www.springframework.org/schema/aop/spring-aop-3.0.xsd">
+
+	<aop:aspectj-autoproxy />
+
+	<bean id="myDataSource" class="org.apache.commons.dbcp.BasicDataSource">
+		<!-- results in a setDriverClassName(String) call 123 -->
+		<property name="driverClassName" value="com.mysql.jdbc.Driver" />
+		<property name="url" value="jdbc:mysql://localhost:3306/test" />
+		<property name="username" value="root" />
+		<property name="password" value="root" />
+	</bean>
+
+	<bean id="mySessionFactory"
+		class="org.springframework.orm.hibernate4.LocalSessionFactoryBean">
+		<property name="dataSource" ref="myDataSource" />
+		<property name="mappingResources">
+			<list>
+				<value>org/springframework/springapp/domain/Product.hbm.xml</value>
+			</list>
+		</property>
+		<property name="hibernateProperties">
+			<value>
+				hibernate.show_sql=true
+				hibernate.dialect=org.hibernate.dialect.MySQLDialect
+				hibernate.current_session_context_class=thread
+				hibernate.cache.provider_class=org.hibernate.cache.internal.NoCacheProvider
+			</value>
+		</property>
+	</bean>
+
+	<bean id="txManager"
+		class="org.springframework.orm.hibernate4.HibernateTransactionManager">
+		<property name="sessionFactory" ref="mySessionFactory" />
+	</bean>
+
+	<!-- <bean id="trxAdvice" class="org.springframework.springapp.aspects.TransactionAdvice"> 
+		<property name="txManagerFactory" ref="txManager" /> </bean> -->
+
+	<bean id="myProductDao" class="org.springframework.springapp.dao.ProductDaoImpl">
+		<property name="txManagerFactory" ref="txManager" />
+		<!-- <property name="sessionFactory" ref="mySessionFactory"/> -->
+	</bean>
+
+	<bean id="productManager"
+		class="org.springframework.springapp.service.SimpleProductManager">
+		<property name="productDao" ref="myProductDao" />
+	</bean>
+
+	<!-- <bean id="priceIncrease" class="org.springframework.springapp.service.PriceIncrease"> 
+		<property name="percentage" value="20" /> </bean> <bean id="validator" class="org.springframework.springapp.service.PriceIncreaseValidator" 
+		/> -->
+
+	<!-- the transactional advice (what 'happens'; see the <aop:advisor/> bean below) -->
+	<tx:advice id="txAdvice" transaction-manager="txManager">
+		<!-- the transactional semantics... -->
+		<tx:attributes>
+			<!-- all methods starting with 'get' are read-only -->
+			<tx:method name="get*" read-only="true" />
+			<!-- other methods use the default transaction settings (see below) -->
+			<tx:method name="*" />
+		</tx:attributes>
+	</tx:advice>
+
+	<!-- ensure that the above transactional advice runs for any execution of an operation defined by the FooService interface -->
+	<aop:config>
+		<aop:pointcut id="trxOperation" expression="execution(* org.springframework.springapp.dao.*.*(..))" />
+		<aop:advisor advice-ref="txAdvice" pointcut-ref="trxOperation" />
+	</aop:config>
+
+</beans>
